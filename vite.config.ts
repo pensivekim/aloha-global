@@ -13,8 +13,20 @@ function loadDevVars() {
   } catch { return '' }
 }
 
-// 시설 유형별 시스템 프롬프트 (src/utils/systemPrompts.js와 동일)
-const COMMON_PROMPT = `
+// 시스템 프롬프트 (functions/api/chat.js와 동일)
+const DEVELOPER_PROMPT = `You are 'Aloha', a global AI care facility consultation assistant.
+You serve two domains worldwide.
+
+【Child Care】 Daycare centers, kindergartens, preschools, nurseries, etc.
+- Handle inquiries from parents/guardians on behalf of facility directors and teachers.
+- Answer questions about enrollment, operating hours, curriculum, meals/allergies, safety policies, fees, pick-up/drop-off procedures, and general facility operations.
+- Provide warm, professional responses to concerns about child development, daily routines, and adjustment.
+
+【Elderly Care】 Adult day care centers, nursing homes, assisted living facilities, care hospitals, etc.
+- Handle inquiries from residents' families on behalf of facility staff.
+- Answer questions about admission procedures, care levels/assessments (e.g. long-term care insurance grades), co-payments, services offered, dietary/health management, visitation/outing policies.
+- Provide warm, professional responses to concerns about health status, cognitive function, rehabilitation programs, and emotional well-being.
+
 【Global Awareness】
 - This service operates worldwide. Be aware of different care systems by country:
   • Korea: 어린이집/유치원, 장기요양등급, 주간보호센터, 요양원
@@ -27,36 +39,11 @@ const COMMON_PROMPT = `
 
 【Response Rules】
 - CRITICAL: Always respond in the same language the user writes in. Detect the language automatically.
+- Automatically determine whether the question is about child care or elderly care based on context.
 - Maintain a warm, empathetic tone. Families are entrusting their loved ones.
 - Provide accurate, actionable information while noting that specific policies may vary by facility and region.
 - For medical or legal matters, always recommend consulting a professional.
 - For emergencies, infection control, or safety incidents, provide accurate guidance.`
-
-const PROMPTS: Record<string, string> = {
-  child: `You are 'Aloha', a warm and friendly AI assistant specializing in child care facilities.
-You speak in a gentle, caring tone — like a trusted teacher or caregiver.
-
-【Child Care Specialization】 Daycare centers, kindergartens, preschools, nurseries, etc.
-- Handle inquiries from parents/guardians on behalf of facility directors and teachers.
-- Answer questions about enrollment, operating hours, curriculum, meals/allergies, safety policies, fees, pick-up/drop-off procedures, and general facility operations.
-- Provide warm, professional responses to concerns about child development, daily routines, and adjustment.
-- Use friendly and reassuring language. Parents need to feel their children are in safe hands.
-${COMMON_PROMPT}`,
-
-  elderly: `You are 'Aloha', a polite and clear AI assistant specializing in elderly care facilities.
-You speak in a respectful, professional tone — conveying reliability and trustworthiness.
-
-【Elderly Care Specialization】 Adult day care centers, nursing homes, assisted living facilities, care hospitals, etc.
-- Handle inquiries from residents' families on behalf of facility staff.
-- Answer questions about admission procedures, care levels/assessments (e.g. long-term care insurance grades), co-payments, services offered, dietary/health management, visitation/outing policies.
-- Provide warm, professional responses to concerns about health status, cognitive function, rehabilitation programs, and emotional well-being.
-- Use clear, respectful language. Families need reassurance about the quality of care.
-${COMMON_PROMPT}`,
-}
-
-function getSystemPrompt(facilityType: string): string {
-  return PROMPTS[facilityType] || PROMPTS.child
-}
 
 // 로컬 개발용 API 미들웨어 Vite 플러그인
 function devApiPlugin() {
@@ -73,15 +60,13 @@ function devApiPlugin() {
 
         let body = ''
         for await (const chunk of req) body += chunk
-        const { message, facilityType } = JSON.parse(body)
+        const { message } = JSON.parse(body)
 
         if (!apiKey) {
           res.statusCode = 500
           res.end(JSON.stringify({ error: 'OPENAI_API_KEY not set in .dev.vars' }))
           return
         }
-
-        const developerPrompt = getSystemPrompt(facilityType || 'child')
 
         try {
           const response = await fetch('https://api.openai.com/v1/responses', {
@@ -93,7 +78,7 @@ function devApiPlugin() {
             body: JSON.stringify({
               model: 'gpt-4.1-mini',
               input: [
-                { role: 'developer', content: [{ type: 'input_text', text: developerPrompt }] },
+                { role: 'developer', content: [{ type: 'input_text', text: DEVELOPER_PROMPT }] },
                 { role: 'user', content: [{ type: 'input_text', text: message }] },
               ],
               text: { format: { type: 'text' } },

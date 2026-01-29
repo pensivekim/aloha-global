@@ -1,7 +1,20 @@
 // Cloudflare Pages Function — OpenAI Responses API를 통한 돌봄시설 상담 챗봇
 // POST /api/chat
 
-const COMMON_PROMPT = `
+// 시스템 프롬프트: 전 세계 돌봄 시설 상담 AI 역할 정의
+const DEVELOPER_PROMPT = `You are 'Aloha', a global AI care facility consultation assistant.
+You serve two domains worldwide.
+
+【Child Care】 Daycare centers, kindergartens, preschools, nurseries, etc.
+- Handle inquiries from parents/guardians on behalf of facility directors and teachers.
+- Answer questions about enrollment, operating hours, curriculum, meals/allergies, safety policies, fees, pick-up/drop-off procedures, and general facility operations.
+- Provide warm, professional responses to concerns about child development, daily routines, and adjustment.
+
+【Elderly Care】 Adult day care centers, nursing homes, assisted living facilities, care hospitals, etc.
+- Handle inquiries from residents' families on behalf of facility staff.
+- Answer questions about admission procedures, care levels/assessments (e.g. long-term care insurance grades), co-payments, services offered, dietary/health management, visitation/outing policies.
+- Provide warm, professional responses to concerns about health status, cognitive function, rehabilitation programs, and emotional well-being.
+
 【Global Awareness】
 - This service operates worldwide. Be aware of different care systems by country:
   • Korea: 어린이집/유치원, 장기요양등급, 주간보호센터, 요양원
@@ -14,36 +27,11 @@ const COMMON_PROMPT = `
 
 【Response Rules】
 - CRITICAL: Always respond in the same language the user writes in. Detect the language automatically.
+- Automatically determine whether the question is about child care or elderly care based on context.
 - Maintain a warm, empathetic tone. Families are entrusting their loved ones.
 - Provide accurate, actionable information while noting that specific policies may vary by facility and region.
 - For medical or legal matters, always recommend consulting a professional.
 - For emergencies, infection control, or safety incidents, provide accurate guidance.`;
-
-const PROMPTS = {
-  child: `You are 'Aloha', a warm and friendly AI assistant specializing in child care facilities.
-You speak in a gentle, caring tone — like a trusted teacher or caregiver.
-
-【Child Care Specialization】 Daycare centers, kindergartens, preschools, nurseries, etc.
-- Handle inquiries from parents/guardians on behalf of facility directors and teachers.
-- Answer questions about enrollment, operating hours, curriculum, meals/allergies, safety policies, fees, pick-up/drop-off procedures, and general facility operations.
-- Provide warm, professional responses to concerns about child development, daily routines, and adjustment.
-- Use friendly and reassuring language. Parents need to feel their children are in safe hands.
-${COMMON_PROMPT}`,
-
-  elderly: `You are 'Aloha', a polite and clear AI assistant specializing in elderly care facilities.
-You speak in a respectful, professional tone — conveying reliability and trustworthiness.
-
-【Elderly Care Specialization】 Adult day care centers, nursing homes, assisted living facilities, care hospitals, etc.
-- Handle inquiries from residents' families on behalf of facility staff.
-- Answer questions about admission procedures, care levels/assessments (e.g. long-term care insurance grades), co-payments, services offered, dietary/health management, visitation/outing policies.
-- Provide warm, professional responses to concerns about health status, cognitive function, rehabilitation programs, and emotional well-being.
-- Use clear, respectful language. Families need reassurance about the quality of care.
-${COMMON_PROMPT}`,
-};
-
-function getSystemPrompt(facilityType) {
-  return PROMPTS[facilityType] || PROMPTS.child;
-}
 
 export async function onRequestPost(context) {
   const apiKey = context.env.OPENAI_API_KEY;
@@ -56,7 +44,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const { message, facilityType } = await context.request.json();
+    const { message } = await context.request.json();
 
     if (!message || typeof message !== "string") {
       return new Response(
@@ -65,8 +53,7 @@ export async function onRequestPost(context) {
       );
     }
 
-    const developerPrompt = getSystemPrompt(facilityType || "child");
-
+    // OpenAI Responses API 호출
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -78,14 +65,26 @@ export async function onRequestPost(context) {
         input: [
           {
             role: "developer",
-            content: [{ type: "input_text", text: developerPrompt }],
+            content: [
+              {
+                type: "input_text",
+                text: DEVELOPER_PROMPT,
+              },
+            ],
           },
           {
             role: "user",
-            content: [{ type: "input_text", text: message }],
+            content: [
+              {
+                type: "input_text",
+                text: message,
+              },
+            ],
           },
         ],
-        text: { format: { type: "text" } },
+        text: {
+          format: { type: "text" },
+        },
         store: true,
       }),
     });
@@ -98,6 +97,8 @@ export async function onRequestPost(context) {
     }
 
     const data = await response.json();
+
+    // Responses API 출력에서 output_text 추출
     const outputItem = data.output?.find((item) => item.role === "assistant");
     const textContent = outputItem?.content?.find((c) => c.type === "output_text");
     const reply = textContent?.text ?? "응답을 생성할 수 없었습니다.";
