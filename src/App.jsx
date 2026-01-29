@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, Bot, MessageCircle, Loader2 } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { Send, Bot, MessageCircle, Loader2, AlertCircle } from "lucide-react";
 
 // 브라우저 언어별 UI 텍스트 정의
 const i18n = {
@@ -10,6 +11,11 @@ const i18n = {
       "안녕하세요! 돌봄 시설 상담 도우미 Aloha예요 🌺\n\n영유아 시설(어린이집·유치원)과 노인복지시설(주간보호·요양원) 관련 문의를 도와드려요.\n궁금한 점을 편하게 물어보세요!",
     placeholder: "궁금한 점을 입력하세요...",
     thinking: "답변 작성 중...",
+    facilityNotFound: "시설을 찾을 수 없습니다.",
+    facilityNotFoundDesc: "요청하신 시설 ID가 존재하지 않습니다. URL을 확인해 주세요.",
+    loadingFacility: "시설 정보를 불러오는 중...",
+    homeTitle: "Aloha에 오신 것을 환영합니다",
+    homeDesc: "시설 전용 URL로 접속하여 맞춤 상담을 받으세요.",
   },
   en: {
     title: "Aloha Chatbot",
@@ -18,6 +24,11 @@ const i18n = {
       "Hello! I'm Aloha, your care facility assistant 🌺\n\nI can help with inquiries about child care (daycare, preschool) and elderly care (nursing homes, day care centers).\nFeel free to ask anything!",
     placeholder: "Type your question...",
     thinking: "Thinking...",
+    facilityNotFound: "Facility not found",
+    facilityNotFoundDesc: "The requested facility ID does not exist. Please check the URL.",
+    loadingFacility: "Loading facility info...",
+    homeTitle: "Welcome to Aloha",
+    homeDesc: "Access a facility-specific URL to get personalized assistance.",
   },
   ja: {
     title: "Aloha チャットボット",
@@ -26,6 +37,11 @@ const i18n = {
       "こんにちは！ケア施設相談アシスタントのAlohaです 🌺\n\n保育施設（保育所・幼稚園）や高齢者施設（デイサービス・特養）に関するご質問にお答えします。\nお気軽にどうぞ！",
     placeholder: "ご質問を入力してください...",
     thinking: "回答を作成中...",
+    facilityNotFound: "施設が見つかりません",
+    facilityNotFoundDesc: "指定された施設IDは存在しません。URLをご確認ください。",
+    loadingFacility: "施設情報を読み込み中...",
+    homeTitle: "Alohaへようこそ",
+    homeDesc: "施設専用URLにアクセスして、カスタマイズされた相談をご利用ください。",
   },
   zh: {
     title: "Aloha 聊天助手",
@@ -34,6 +50,11 @@ const i18n = {
       "您好！我是护理机构咨询助手 Aloha 🌺\n\n我可以帮助解答有关幼儿园、托儿所以及养老院、日间照护中心等方面的问题。\n请随时提问！",
     placeholder: "请输入您的问题...",
     thinking: "正在生成回复...",
+    facilityNotFound: "未找到该机构",
+    facilityNotFoundDesc: "请求的机构ID不存在，请检查URL。",
+    loadingFacility: "正在加载机构信息...",
+    homeTitle: "欢迎使用 Aloha",
+    homeDesc: "请访问机构专属URL以获取个性化咨询。",
   },
   es: {
     title: "Aloha Chatbot",
@@ -42,6 +63,11 @@ const i18n = {
       "¡Hola! Soy Aloha, tu asistente de centros de cuidado 🌺\n\nPuedo ayudarte con consultas sobre guarderías, preescolares, residencias de ancianos y centros de día.\n¡Pregunta lo que necesites!",
     placeholder: "Escribe tu pregunta...",
     thinking: "Pensando...",
+    facilityNotFound: "Centro no encontrado",
+    facilityNotFoundDesc: "El ID del centro solicitado no existe. Por favor, revise la URL.",
+    loadingFacility: "Cargando información del centro...",
+    homeTitle: "Bienvenido a Aloha",
+    homeDesc: "Acceda a una URL específica del centro para recibir asistencia personalizada.",
   },
   vi: {
     title: "Aloha Chatbot",
@@ -50,6 +76,11 @@ const i18n = {
       "Xin chào! Tôi là Aloha, trợ lý tư vấn cơ sở chăm sóc 🌺\n\nTôi có thể hỗ trợ các câu hỏi về nhà trẻ, mẫu giáo, viện dưỡng lão và trung tâm chăm sóc ban ngày.\nHãy hỏi bất cứ điều gì!",
     placeholder: "Nhập câu hỏi của bạn...",
     thinking: "Đang suy nghĩ...",
+    facilityNotFound: "Không tìm thấy cơ sở",
+    facilityNotFoundDesc: "ID cơ sở yêu cầu không tồn tại. Vui lòng kiểm tra URL.",
+    loadingFacility: "Đang tải thông tin cơ sở...",
+    homeTitle: "Chào mừng đến với Aloha",
+    homeDesc: "Truy cập URL chuyên dụng của cơ sở để được tư vấn cá nhân hóa.",
   },
 };
 
@@ -62,9 +93,16 @@ function detectLang() {
 
 // Aloha — Global Care Facility AI Assistant
 function App() {
+  const { facilityId } = useParams();
+
   // 브라우저 언어 감지
   const lang = useMemo(() => detectLang(), []);
   const t = i18n[lang];
+
+  // 시설 정보 상태
+  const [facility, setFacility] = useState(null);
+  const [facilityLoading, setFacilityLoading] = useState(false);
+  const [facilityError, setFacilityError] = useState(false);
 
   // 메시지 목록 상태
   const [messages, setMessages] = useState([
@@ -76,6 +114,35 @@ function App() {
   const [loading, setLoading] = useState(false);
   // 메시지 끝으로 자동 스크롤하기 위한 ref
   const bottomRef = useRef(null);
+
+  // 시설 정보 로드
+  useEffect(() => {
+    if (!facilityId) return;
+
+    setFacilityLoading(true);
+    setFacilityError(false);
+
+    fetch(`/api/facility/${facilityId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Not found");
+        return res.json();
+      })
+      .then((data) => {
+        setFacility(data);
+        setMessages([
+          {
+            role: "bot",
+            text: t.welcome,
+          },
+        ]);
+      })
+      .catch(() => {
+        setFacilityError(true);
+      })
+      .finally(() => {
+        setFacilityLoading(false);
+      });
+  }, [facilityId]);
 
   // 새 메시지가 추가될 때마다 하단으로 스크롤
   useEffect(() => {
@@ -98,7 +165,10 @@ function App() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({
+          message: trimmed,
+          facilityId: facilityId || null,
+        }),
       });
 
       const data = await res.json();
@@ -125,6 +195,49 @@ function App() {
     }
   };
 
+  // 시설 로딩 중
+  if (facilityId && facilityLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-400 mx-auto mb-3" />
+          <p className="text-gray-500">{t.loadingFacility}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 시설 ID가 있지만 찾을 수 없는 경우
+  if (facilityId && facilityError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <AlertCircle className="w-12 h-12 text-orange-400 mx-auto mb-3" />
+          <h2 className="text-lg font-bold text-gray-700 mb-2">{t.facilityNotFound}</h2>
+          <p className="text-gray-500 text-sm">{t.facilityNotFoundDesc}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 홈 페이지 (시설 ID 없이 접속)
+  if (!facilityId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-orange-200 flex items-center justify-center mx-auto mb-4">
+            <MessageCircle className="w-8 h-8 text-orange-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-700 mb-2">{t.homeTitle}</h1>
+          <p className="text-gray-500 text-sm">{t.homeDesc}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const displayName = facility?.name || t.title;
+  const displaySubtitle = facility?.description || t.subtitle;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 flex items-center justify-center p-4">
       {/* 챗봇 카드 */}
@@ -137,10 +250,10 @@ function App() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-white tracking-wide">
-              {t.title}
+              {displayName}
             </h1>
             <p className="text-xs text-white/80">
-              {t.subtitle}
+              {displaySubtitle}
             </p>
           </div>
         </header>

@@ -44,13 +44,48 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const { message } = await context.request.json();
+    const { message, facilityId } = await context.request.json();
 
     if (!message || typeof message !== "string") {
       return new Response(
         JSON.stringify({ error: "메시지가 비어 있습니다." }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
+    }
+
+    // 시설 정보가 있으면 시스템 프롬프트에 주입
+    let systemPrompt = DEVELOPER_PROMPT;
+
+    if (facilityId && context.env.FACILITY_DATA) {
+      const facilityData = await context.env.FACILITY_DATA.get(
+        `facility:${facilityId}`,
+        "json"
+      );
+      if (facilityData) {
+        systemPrompt +=
+          "\n\n【현재 상담 중인 시설 정보 / Current Facility Info】\n" +
+          JSON.stringify(facilityData, null, 2) +
+          "\n\nIMPORTANT: You are now representing this specific facility. " +
+          "Answer questions based on this facility's actual information. " +
+          "Use the facility's name, hours, policies, and other details in your responses. " +
+          "If the user asks something not covered by the facility data, provide general guidance and note that they should contact the facility directly for specifics.";
+      }
+
+      // 블로그 글 조회 및 프롬프트 주입
+      const blogData = await context.env.FACILITY_DATA.get(
+        `blog-posts:${facilityId}`,
+        "json"
+      );
+      if (blogData && blogData.posts && blogData.posts.length > 0) {
+        systemPrompt += "\n\n【최근 시설 활동/소식】\n";
+        blogData.posts.forEach((post, i) => {
+          systemPrompt += `${i + 1}. [${post.date}] ${post.title}`;
+          if (post.content) {
+            systemPrompt += ` - ${post.content}`;
+          }
+          systemPrompt += "\n";
+        });
+      }
     }
 
     // OpenAI Responses API 호출
@@ -68,7 +103,7 @@ export async function onRequestPost(context) {
             content: [
               {
                 type: "input_text",
-                text: DEVELOPER_PROMPT,
+                text: systemPrompt,
               },
             ],
           },

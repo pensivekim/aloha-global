@@ -9,6 +9,7 @@ lerna-debug.log*
 
 .env
 .dev.vars
+blog-cache.json
 node_modules
 dist
 dist-ssr

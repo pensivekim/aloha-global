@@ -1,0 +1,6 @@
+name = "aloha-global"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "FACILITY_DATA"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
